@@ -13,6 +13,17 @@ const config: Config = {
         "gradient-conic":
           "conic-gradient(from 180deg at 50% 50%, var(--tw-gradient-stops))",
       },
+      letterSpacing: {
+        wider: "0.1em",
+      },
+      animation: {
+        "fade-in": "fadeInSlideUp 0.8s cubic-bezier(0.34, 1.56, 0.64, 1) forwards",
+        "fade-in-subtitle": "fadeInSlideUp 0.8s cubic-bezier(0.34, 1.56, 0.64, 1) 0.1s forwards",
+        "fade-in-cta": "fadeInSlideUp 0.8s cubic-bezier(0.34, 1.56, 0.64, 1) 0.2s forwards",
+      },
+      transitionTimingFunction: {
+        "smooth": "cubic-bezier(0.34, 1.56, 0.64, 1)",
+      },
     },
   },
   plugins: [],
