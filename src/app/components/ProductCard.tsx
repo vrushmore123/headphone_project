@@ -10,182 +10,85 @@ interface ProductCardProps {
   price: string;
   image: string;
   badge?: string;
-  color?: string;
   delay?: number;
 }
 
-const containerVariants = {
-  hidden: { opacity: 0 },
-  visible: {
-    opacity: 1,
-    transition: {
-      staggerChildren: 0.1,
-      delayChildren: 0.2,
-    },
-  },
-};
-
 const itemVariants = {
-  hidden: { opacity: 0, y: 20 },
+  hidden: { opacity: 0, y: 30 },
   visible: {
     opacity: 1,
     y: 0,
     transition: {
-      duration: 0.8,
-      ease: "easeOut",
+      duration: 1.2,
+      ease: [0.16, 1, 0.3, 1],
     },
   },
 };
 
 export default function ProductCard({
-  id,
   name,
   description,
   price,
   image,
   badge,
-  color = "from-white/10 to-white/5",
   delay = 0,
 }: ProductCardProps) {
   return (
     <motion.div
       variants={itemVariants}
-      initial="hidden"
-      whileInView="visible"
-      viewport={{ once: true, margin: "-100px" }}
+      className="group relative flex flex-col"
       transition={{ delay: delay * 0.1 }}
-      className="group h-full"
     >
-      <motion.div
-        className="relative h-full rounded-2xl border border-white/10 bg-gradient-to-br from-white/8 to-white/3 backdrop-blur-xl p-6 overflow-hidden transition-all duration-500 hover:border-white/20 cursor-pointer"
-        whileHover={{
-          y: -8,
-          boxShadow: "0 25px 50px rgba(0, 0, 0, 0.5)",
-        }}
-        transition={{ duration: 0.3 }}
-      >
-        {/* Animated gradient background on hover */}
-        <div
-          className="absolute inset-0 bg-gradient-to-br from-white/10 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500"
-          style={{
-            pointerEvents: "none",
-          }}
-        />
-
-        {/* Premium glow effect on hover */}
-        <motion.div
-          className="absolute -inset-2 bg-gradient-to-r from-transparent via-white/20 to-transparent opacity-0 blur-xl group-hover:opacity-30 transition-opacity duration-500"
-          animate={{
-            x: [0, 100, 0],
-          }}
-          transition={{ duration: 4, repeat: Infinity }}
-          style={{ pointerEvents: "none" }}
-        />
-
-        <div className="relative z-10">
-          {/* Badge */}
-          {badge && (
-            <motion.div
-              initial={{ opacity: 0, scale: 0.8 }}
-              whileInView={{ opacity: 1, scale: 1 }}
-              transition={{ delay: delay * 0.1 + 0.3 }}
-              className="inline-flex items-center gap-2 rounded-full border border-white/20 bg-white/10 backdrop-blur-md px-3 py-1 mb-4"
-            >
-              <span className="w-1.5 h-1.5 bg-cyan-400 rounded-full animate-pulse" />
-              <span className="text-white/70 text-xs font-medium tracking-wide">
-                {badge}
-              </span>
-            </motion.div>
-          )}
-
-          {/* Image Container with shimmer effect */}
-          <div className="relative mb-6 overflow-hidden rounded-xl bg-gradient-to-br from-white/5 to-transparent p-1 h-64 flex items-center justify-center group">
-            <div
-              className="absolute inset-0 bg-gradient-to-r from-transparent via-white/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-1000 translate-x-full group-hover:-translate-x-full"
-              style={{ animation: "shimmer 2s infinite" }}
-            />
-            <motion.img
-              src={image}
-              alt={name}
-              className="w-full h-full object-contain filter drop-shadow-2xl"
-              whileHover={{ scale: 1.08 }}
-              transition={{ duration: 0.4 }}
-            />
-          </div>
-
-          {/* Product Info */}
-          <div className="mb-4 space-y-2">
-            <motion.h3
-              className="text-white/95 font-bold tracking-tight text-xl leading-tight"
-              initial={{ opacity: 0.8 }}
-              whileHover={{ opacity: 1 }}
-              transition={{ duration: 0.3 }}
-            >
-              {name}
-            </motion.h3>
-            <p className="text-white/50 text-sm leading-relaxed font-light">
-              {description}
-            </p>
-          </div>
-
-          {/* Price and CTA */}
-          <div className="flex items-end justify-between pt-4 border-t border-white/10">
-            <motion.div
-              initial={{ opacity: 0, y: 10 }}
-              whileInView={{ opacity: 1, y: 0 }}
-              transition={{ delay: delay * 0.1 + 0.4 }}
-            >
-              <div className="text-white/50 text-xs font-medium tracking-wide mb-1">
-                Starting at
-              </div>
-              <div className="text-white font-bold text-2xl tracking-tight">
-                {price}
-              </div>
-            </motion.div>
-
-            {/* Premium CTA Button */}
-            <motion.button
-              className="inline-flex items-center justify-center gap-2 rounded-full border border-white/20 bg-gradient-to-r from-white/20 to-white/10 hover:from-white/30 hover:to-white/20 backdrop-blur-md px-4 py-2.5 text-white/90 font-medium text-xs transition-all duration-300"
-              whileHover={{
-                scale: 1.08,
-                boxShadow: "0 10px 25px rgba(255, 255, 255, 0.1)",
-              }}
-              whileTap={{ scale: 0.96 }}
-            >
-              <span>View</span>
-              <svg
-                className="w-4 h-4"
-                fill="none"
-                viewBox="0 0 24 24"
-                stroke="currentColor"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M9 5l7 7-7 7"
-                />
-              </svg>
-            </motion.button>
-          </div>
-
-          {/* Specs hint */}
-          <motion.div
-            className="mt-4 pt-4 border-t border-white/10 text-white/40 text-xs flex items-center justify-between"
-            initial={{ opacity: 0 }}
-            whileInView={{ opacity: 1 }}
-            transition={{ delay: delay * 0.1 + 0.5 }}
-          >
-            <span>Premium Build • Premium Sound</span>
-            <motion.span
-              animate={{ x: [0, 2, 0] }}
-              transition={{ duration: 1.5, repeat: Infinity }}
-            >
-              →
-            </motion.span>
-          </motion.div>
+      {/* Badge Overlay */}
+      {badge && (
+        <div className="absolute top-0 left-0 z-20">
+          <span className="label-mono text-[10px] bg-red-highlight text-white px-3 py-1">
+            {badge}
+          </span>
         </div>
-      </motion.div>
+      )}
+
+      {/* Image Container */}
+      <div className="relative aspect-[4/5] bg-zinc-black overflow-hidden mb-8 border border-white/5 transition-all duration-700 group-hover:border-white/20">
+        <motion.img
+          src={image}
+          alt={name}
+          className="w-full h-full object-contain p-12 transition-all duration-1000 group-hover:scale-110 group-hover:rotate-2"
+        />
+        
+        {/* Hover Overlay */}
+        <div className="absolute inset-0 bg-deep-black/40 opacity-0 group-hover:opacity-100 transition-opacity duration-500 flex items-center justify-center">
+          <button className="btn-premium opacity-0 group-hover:opacity-100 translate-y-4 group-hover:translate-y-0 transition-all duration-500 delay-100">
+            View Details
+          </button>
+        </div>
+      </div>
+
+      {/* Product Content */}
+      <div className="flex flex-col flex-1">
+        <div className="flex justify-between items-start mb-4">
+          <h3 className="text-white font-nature font-bold text-xl tracking-tight group-hover:text-red-highlight transition-colors duration-500">
+            {name}
+          </h3>
+          <span className="text-white font-mono text-lg font-light">
+            {price}
+          </span>
+        </div>
+        
+        <p className="text-ghost-white/40 text-sm font-light leading-relaxed mb-8 flex-1">
+          {description}
+        </p>
+
+        <div className="flex items-center gap-4 pt-4 border-t border-white/5">
+          <span className="label-mono text-[10px] opacity-40">Series One / Audio</span>
+          <div className="flex-1 h-[1px] bg-white/5" />
+          <button className="text-white/40 hover:text-red-highlight transition-colors duration-300">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+              <path d="M5 12h14m-7-7l7 7-7 7" />
+            </svg>
+          </button>
+        </div>
+      </div>
     </motion.div>
   );
 }

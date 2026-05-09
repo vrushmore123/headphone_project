@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { motion, useScroll, useTransform } from "framer-motion";
+import { motion } from "framer-motion";
 import gsap from "gsap";
 import ScrollTrigger from "gsap/ScrollTrigger";
 
@@ -24,90 +24,60 @@ function frameUrl(index: number, range: FrameRange) {
   return `/frames/ezgif-frame-${n}.${range.ext}`;
 }
 
-async function sampleBackgroundHexFromImage(img: HTMLImageElement) {
-  // Sample the 4 corners and average them. This helps blend image edges
-  // seamlessly if your frames have a non-transparent background.
-  const w = img.naturalWidth || img.width;
-  const h = img.naturalHeight || img.height;
-  if (!w || !h) return "#050505";
-
-  const c = document.createElement("canvas");
-  c.width = 2;
-  c.height = 2;
-  const ctx = c.getContext("2d", { willReadFrequently: true });
-  if (!ctx) return "#050505";
-
-  const corners: Array<[number, number]> = [
-    [0, 0],
-    [w - 1, 0],
-    [0, h - 1],
-    [w - 1, h - 1],
-  ];
-
-  ctx.clearRect(0, 0, 2, 2);
-  corners.forEach(([sx, sy], i) => {
-    const dx = i % 2;
-    const dy = Math.floor(i / 2);
-    ctx.drawImage(img, sx, sy, 1, 1, dx, dy, 1, 1);
-  });
-
-  const data = ctx.getImageData(0, 0, 2, 2).data;
-  let r = 0;
-  let g = 0;
-  let b = 0;
-  for (let i = 0; i < data.length; i += 4) {
-    r += data[i];
-    g += data[i + 1];
-    b += data[i + 2];
-  }
-  r = Math.round(r / 4);
-  g = Math.round(g / 4);
-  b = Math.round(b / 4);
-
-  const toHex = (v: number) => v.toString(16).padStart(2, "0");
-  return `#${toHex(r)}${toHex(g)}${toHex(b)}`;
-}
-
 export default function HeadphoneScroll() {
   const triggerRef = useRef<HTMLDivElement | null>(null);
   const canvasWrapRef = useRef<HTMLDivElement | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
-
-  const titleRef = useRef<HTMLHeadingElement | null>(null);
-  const subtitleRef = useRef<HTMLParagraphElement | null>(null);
-  const badgeRef = useRef<HTMLDivElement | null>(null);
-  const glowRef = useRef<HTMLDivElement | null>(null);
+  const uiRef = useRef<HTMLDivElement | null>(null);
 
   const [loading, setLoading] = useState(true);
-  const [scrollProgress, setScrollProgress] = useState(0);
 
-  const range = useMemo<FrameRange>(
-    () => ({
-      start: FRAME_START,
-      end: FRAME_END,
-      pad: FRAME_PAD,
-      ext: FRAME_EXT,
-    }),
-    []
-  );
+  const range = useMemo<FrameRange>(() => ({
+    start: FRAME_START,
+    end: FRAME_END,
+    pad: FRAME_PAD,
+    ext: FRAME_EXT,
+  }), []);
 
   const frameCount = useMemo(() => range.end - range.start + 1, [range]);
 
   const imagesRef = useRef<(HTMLImageElement | null)[]>([]);
   const desiredFrameRef = useRef(0);
   const currentFrameRef = useRef(0);
-
   const rafPendingRef = useRef(false);
 
-  const sizeRef = useRef({
-    dpr: 1,
-    w: 0,
-    h: 0,
-    imgW: 0,
-    imgH: 0,
-  });
+  const sizeRef = useRef({ dpr: 1, w: 0, h: 0, imgW: 0, imgH: 0 });
 
-  const bgHexRef = useRef<string>("#050505");
+  /* ─── Draw ──────────────────────────────────────── */
+  const draw = () => {
+    const canvas = canvasRef.current;
+    const ctx = canvas?.getContext("2d", { alpha: false });
+    if (!canvas || !ctx) return;
+
+    const { dpr, w, h, imgW, imgH } = sizeRef.current;
+    if (!w || !h || !imgW || !imgH) return;
+
+    ctx.fillStyle = "#000";
+    ctx.fillRect(0, 0, w * dpr, h * dpr);
+
+    const img = imagesRef.current[currentFrameRef.current];
+    if (!img) return;
+
+    // Always centered, safe padding on all sides
+    const pad = 0.10;
+    const scale = Math.min((w * (1 - pad * 2)) / imgW, (h * (1 - pad * 2)) / imgH);
+    const dw = imgW * scale;
+    const dh = imgH * scale;
+    const x = (w - dw) / 2;
+    const y = (h - dh) / 2;
+
+    ctx.save();
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.imageSmoothingEnabled = true;
+    ctx.imageSmoothingQuality = "high";
+    ctx.drawImage(img, x, y, dw, dh);
+    ctx.restore();
+  };
 
   const scheduleDraw = () => {
     if (rafPendingRef.current) return;
@@ -119,489 +89,269 @@ export default function HeadphoneScroll() {
     });
   };
 
-  const draw = () => {
-    const canvas = canvasRef.current;
-    const ctx = canvas?.getContext("2d", { alpha: false });
-    if (!canvas || !ctx) return;
-
-    const { dpr, w, h, imgW, imgH } = sizeRef.current;
-    if (!w || !h || !imgW || !imgH) return;
-
-    // Clear before drawing next frame.
-    ctx.clearRect(0, 0, w * dpr, h * dpr);
-    ctx.fillStyle = bgHexRef.current;
-    ctx.fillRect(0, 0, w * dpr, h * dpr);
-
-    const img = imagesRef.current[currentFrameRef.current];
-    if (!img) return;
-
-    // "Contain" scaling keeps the entire headphone visible.
-    const scale = Math.min(w / imgW, h / imgH);
-    const dw = imgW * scale;
-    const dh = imgH * scale;
-    const x = (w - dw) / 2;
-    const y = (h - dh) / 2;
-
-    ctx.save();
-    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-    ctx.imageSmoothingEnabled = true;
-    ctx.drawImage(img, x, y, dw, dh);
-    ctx.restore();
-  };
-
   const syncCanvasSize = () => {
     const wrap = canvasWrapRef.current;
     const canvas = canvasRef.current;
     if (!wrap || !canvas) return;
-
     const rect = wrap.getBoundingClientRect();
     const w = Math.max(1, Math.floor(rect.width));
     const h = Math.max(1, Math.floor(rect.height));
     const dpr = Math.min(2, window.devicePixelRatio || 1);
-
     sizeRef.current = { ...sizeRef.current, dpr, w, h };
-
     canvas.width = Math.floor(w * dpr);
     canvas.height = Math.floor(h * dpr);
   };
 
+  /* ─── GSAP ScrollTrigger ─────────────────────────── */
   useEffect(() => {
     let destroyed = false;
     let st: ScrollTrigger | null = null;
 
     const preloadAll = async () => {
-      const images: (HTMLImageElement | null)[] = new Array(frameCount).fill(
-        null
-      );
+      const images: (HTMLImageElement | null)[] = new Array(frameCount).fill(null);
       imagesRef.current = images;
-
-      const loadOne = (i: number) =>
-        new Promise<void>((resolve) => {
-          const actualIndex = range.start + i;
-          const url = frameUrl(actualIndex, range);
-
-          const img = new Image();
-          img.decoding = "async";
-          img.loading = "eager";
-          img.onload = () => {
-            images[i] = img;
-            resolve();
-          };
-          img.onerror = () => {
-            // Missing frame shouldn't hard-crash the page.
-            resolve();
-          };
-          img.src = url;
-        });
-
-      await Promise.all(Array.from({ length: frameCount }, (_, i) => loadOne(i)));
-
+      await Promise.all(
+        Array.from({ length: frameCount }, (_, i) =>
+          new Promise<void>((resolve) => {
+            const img = new Image();
+            img.onload = () => { images[i] = img; resolve(); };
+            img.onerror = () => resolve();
+            img.src = frameUrl(range.start + i, range);
+          })
+        )
+      );
       if (destroyed) return;
-
-      // Use the first successfully loaded frame for image sizing + background.
-      const first = images.find(Boolean) as HTMLImageElement | undefined;
+      const first = images.find(Boolean);
       if (first) {
         sizeRef.current.imgW = first.naturalWidth || 0;
         sizeRef.current.imgH = first.naturalHeight || 0;
-        bgHexRef.current = await sampleBackgroundHexFromImage(first).catch(
-          () => "#050505"
-        );
       }
     };
 
     const setup = async () => {
-      const canvas = canvasRef.current;
-      const canvasWrap = canvasWrapRef.current;
-      const trigger = triggerRef.current;
-      if (!canvas || !canvasWrap || !trigger) return;
-
-      // Preload frames before starting the scroll animation.
       setLoading(true);
       await preloadAll();
       if (destroyed) return;
 
       syncCanvasSize();
       draw();
-
       setLoading(false);
 
-      const state = { frame: 0 };
-
       st = ScrollTrigger.create({
-        trigger,
+        trigger: triggerRef.current,
         start: "top top",
-        end: "+=400%",
-        scrub: true,
+        end: "+=300%",
+        scrub: 1.5,
         pin: true,
-        anticipatePin: 1,
         onUpdate: (self) => {
-          // Scroll up/down naturally reverses because scrub is enabled.
           const next = Math.round(self.progress * (frameCount - 1));
           desiredFrameRef.current = Math.max(0, Math.min(frameCount - 1, next));
           scheduleDraw();
 
-          // Enhanced scroll-driven animations with easing
-          const p = self.progress;
-          
-          // Glow effect intensity
-          if (glowRef.current) {
-            const glowIntensity = Math.sin(p * Math.PI) * 0.6 + 0.4;
-            glowRef.current.style.opacity = String(glowIntensity);
+          // Subtle canvas breathe on scroll
+          if (canvasRef.current) {
+            canvasRef.current.style.transform = `scale(${1 + self.progress * 0.05})`;
           }
-
-          // Title animation with smooth easing
-          if (titleRef.current) {
-            const a = Math.max(0, Math.min(1, (p - 0.05) / 0.18));
-            const eased = a < 0.5 ? 2 * a * a : -1 + (4 - 2 * a) * a;
-            titleRef.current.style.opacity = String(eased);
-            titleRef.current.style.transform = `translateY(${(1 - eased) * 20}px)`;
-            titleRef.current.style.filter = `blur(${(1 - eased) * 4}px)`;
-          }
-          
-          // Subtitle animation with delay and easing
-          if (subtitleRef.current) {
-            const a = Math.max(0, Math.min(1, (p - 0.12) / 0.18));
-            const eased = a < 0.5 ? 2 * a * a : -1 + (4 - 2 * a) * a;
-            subtitleRef.current.style.opacity = String(eased);
-            subtitleRef.current.style.transform = `translateY(${(1 - eased) * 16}px)`;
-            subtitleRef.current.style.filter = `blur(${(1 - eased) * 3}px)`;
-          }
-          
-          // Badge fade out at end
-          if (badgeRef.current) {
-            const a = Math.max(0, Math.min(1, (0.72 - p) / 0.2));
-            badgeRef.current.style.opacity = String(a);
-            badgeRef.current.style.transform = `translateY(${(1 - a) * 10}px)`;
+          // UI fade
+          if (uiRef.current) {
+            uiRef.current.style.opacity = String(1 - self.progress * 2.2);
           }
         },
       });
 
-      // Make sure we redraw after pin starts (layout can change).
-      scheduleDraw();
-
-      const onResize = () => {
-        syncCanvasSize();
-        scheduleDraw();
-      };
+      const onResize = () => { syncCanvasSize(); draw(); };
       window.addEventListener("resize", onResize);
-
-      // Cleanup.
-      return () => {
-        window.removeEventListener("resize", onResize);
-      };
+      return () => window.removeEventListener("resize", onResize);
     };
 
-    const cleanupResize = setup();
+    setup();
+    return () => { destroyed = true; if (st) st.kill(); };
+  }, [frameCount, range]);
 
-    return () => {
-      destroyed = true;
-      if (st) st.kill();
-      cleanupResize?.then((fn) => fn?.());
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [frameCount, range.start, range.end, range.ext, range.pad]);
-
+  /* ─── JSX ────────────────────────────────────────── */
   return (
-    <section
-      id="sonic-scroll"
-      className="relative text-white overflow-hidden"
-    >
-      {/*
-        Extra scroll distance (300vh) lives on the pinned trigger element.
-        ScrollTrigger will pin it and scrub the frame index.
-      */}
-      <div ref={triggerRef} className="relative h-[300vh]">
-        {/* Sticky banner covering full height */}
-        <div
-          ref={canvasWrapRef}
-          className="sticky top-0 h-screen w-full flex items-center justify-center overflow-hidden bg-gradient-to-b from-[#0a0a0a] via-[#050505] to-black"
-        >
-          {/* Premium glow effect behind product */}
-          <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-            <div
-              className="absolute w-[600px] h-[600px] opacity-0 transition-opacity duration-700 will-change-gpu"
-              ref={glowRef}
-              style={{
-                background: "radial-gradient(circle at center, rgba(255,255,255,0.08), rgba(255,255,255,0.02) 40%, transparent 70%)",
-                filter: "blur(60px)",
-              }}
-            />
-          </div>
+    <section ref={triggerRef} className="relative bg-black overflow-hidden h-[100vh]">
+      <div ref={canvasWrapRef} className="sticky top-0 h-screen w-full overflow-hidden">
 
-          {/* Canvas with 3D perspective - covers entire banner */}
-          <div className="absolute inset-0 w-full h-full flex items-center justify-center" style={{ perspective: "1200px" }}>
-            <canvas
-              ref={canvasRef}
-              className="w-full h-full block"
-              aria-hidden="true"
-              style={{
-                filter: "drop-shadow(0 40px 80px rgba(0,0,0,0.4))",
-              }}
-            />
-          </div>
-
-          {/* Premium overlay content - positioned on top of animation */}
-          <div className="absolute inset-0 flex flex-col justify-between p-6 md:p-10 pointer-events-none">
-            {/* Header/Navigation with Framer Motion */}
-            <motion.div
-              initial={{ opacity: 0, y: -20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.8, delay: 0.2 }}
-              className="flex items-center justify-between"
-            >
-              <motion.div className="text-white/90 font-semibold tracking-tight text-lg md:text-xl letter-spacing-wider">
-                SonicWave Pro
-              </motion.div>
-              <motion.div className="hidden md:flex items-center gap-6 text-white/60 text-sm">
-                <motion.a
-                  href="#"
-                  className="hover:text-white/90 transition-smooth pointer-events-auto"
-                  whileHover={{ color: "rgba(255,255,255,0.9)" }}
-                >
-                  Story
-                </motion.a>
-                <motion.a
-                  href="#cta"
-                  className="hover:text-white/90 transition-smooth pointer-events-auto"
-                  whileHover={{ color: "rgba(255,255,255,0.9)" }}
-                >
-                  Shop
-                </motion.a>
-              </motion.div>
-            </motion.div>
-
-            {/* Parallax text overlay - "Sound Redefined" */}
-            <motion.div
-              className="absolute top-1/4 left-0 right-0 text-center pointer-events-none"
-              style={{
-                opacity: Math.max(0, 1 - scrollProgress * 3),
-                y: scrollProgress * 100,
-              }}
-            >
-              <div className="text-white/20 font-light tracking-widest text-xl md:text-2xl">
-                Sound Redefined
-              </div>
-            </motion.div>
-
-            {/* Hero content - centered in banner with enhanced animations */}
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              transition={{ duration: 1 }}
-              className="flex items-center justify-center flex-1"
-            >
-              <div className="max-w-4xl w-full text-center">
-                <motion.h1
-                  initial={{ opacity: 0, y: 20 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ duration: 0.8, delay: 0.3 }}
-                  className="text-white/90 font-bold tracking-tight text-5xl md:text-7xl leading-[1.1]"
-                >
-                  Premium wireless<br />
-                  <motion.span
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: 1 }}
-                    transition={{ duration: 0.8, delay: 0.5 }}
-                    className="bg-gradient-to-r from-white via-white/80 to-white/60 bg-clip-text text-transparent"
-                  >
-                    headphones
-                  </motion.span>
-                </motion.h1>
-
-                <motion.p
-                  initial={{ opacity: 0, y: 20 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ duration: 0.8, delay: 0.4 }}
-                  className="text-white/60 max-w-2xl text-base md:text-lg font-light mt-6 leading-relaxed mx-auto"
-                >
-                  Engineered for impact and calibrated for silence. Experience the pinnacle of audio craftsmanship.
-                </motion.p>
-
-                <motion.div
-                  initial={{ opacity: 0, y: 20 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ duration: 0.8, delay: 0.5 }}
-                  className="mt-12 flex flex-col sm:flex-row gap-4 items-center justify-center pointer-events-auto"
-                >
-                  <motion.a
-                    href="#"
-                    className="inline-flex items-center justify-center gap-2 rounded-full border border-white/20 bg-white/10 backdrop-blur-md px-8 py-3.5 text-white/90 font-medium text-sm md:text-base hover:bg-white/15 hover:border-white/30 transition-smooth group"
-                    whileHover={{ scale: 1.05, y: -2 }}
-                    whileTap={{ scale: 0.98 }}
-                  >
-                    <span>Scroll to Explore</span>
-                    <motion.svg
-                      width="18"
-                      height="18"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      xmlns="http://www.w3.org/2000/svg"
-                      aria-hidden="true"
-                      className="group-hover:translate-y-1 transition-smooth"
-                      animate={{ y: [0, 4, 0] }}
-                      transition={{ duration: 1.5, repeat: Infinity }}
-                    >
-                      <path
-                        d="M12 5v14"
-                        stroke="currentColor"
-                        strokeWidth="2"
-                        strokeLinecap="round"
-                      />
-                      <path
-                        d="M19 12l-7 7-7-7"
-                        stroke="currentColor"
-                        strokeWidth="2"
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                      />
-                    </motion.svg>
-                  </motion.a>
-
-                  <motion.a
-                    href="#cta"
-                    className="inline-flex items-center justify-center rounded-full bg-gradient-to-r from-white/10 to-white/5 backdrop-blur-md px-8 py-3.5 text-white/90 font-medium text-sm md:text-base hover:from-white/15 hover:to-white/10 border border-white/10 transition-smooth"
-                    whileHover={{ scale: 1.05, y: -2 }}
-                    whileTap={{ scale: 0.98 }}
-                  >
-                    Get SonicWave Pro
-                  </motion.a>
-                </motion.div>
-              </div>
-            </motion.div>
-
-            {/* Parallax text overlay - "Engineered Excellence" */}
-            <motion.div
-              className="absolute bottom-1/4 left-0 right-0 text-center pointer-events-none"
-              style={{
-                opacity: Math.max(0, Math.min(1, (scrollProgress - 0.3) * 2)),
-                y: -scrollProgress * 80,
-              }}
-            >
-              <div className="text-white/15 font-light tracking-widest text-lg md:text-xl">
-                Engineered Excellence
-              </div>
-            </motion.div>
-
-            {/* Bottom section with badge and floating elements */}
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.8, delay: 0.6 }}
-              className="flex items-center justify-between"
-            >
-              {/* Floating badge */}
-              <motion.div
-                animate={{ y: [0, -8, 0] }}
-                transition={{ duration: 3, repeat: Infinity }}
-              >
-                <div className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-black/40 backdrop-blur-md px-4 py-2 text-white/60 text-xs md:text-sm">
-                  <motion.span
-                    className="w-2 h-2 bg-green-400/60 rounded-full"
-                    animate={{ scale: [1, 1.2, 1] }}
-                    transition={{ duration: 2, repeat: Infinity }}
-                  />
-                  Available worldwide
-                </div>
-              </motion.div>
-
-              {/* Info badge with fade transition */}
-              <motion.div
-                ref={badgeRef}
-                className="opacity-100 transition-opacity duration-500"
-                animate={{ opacity: [1, 0.7, 1] }}
-                transition={{ duration: 4, repeat: Infinity }}
-              >
-                <div className="rounded-full border border-white/10 bg-black/40 backdrop-blur-md px-3.5 py-2 text-white/60 text-[11px] md:text-xs font-medium tracking-wide">
-                  Premium Animation • GSAP ScrollTrigger
-                </div>
-              </motion.div>
-            </motion.div>
-          </div>
-
-          {/* Text overlays for scroll-driven animations */}
-          <div className="pointer-events-none absolute inset-0 flex items-start justify-center opacity-0">
-            <div className="w-full max-w-6xl px-6 pt-12 md:pt-20 md:px-10">
-              <h2
-                ref={titleRef}
-                className="opacity-0 text-white/90 font-bold tracking-tight text-4xl md:text-6xl leading-tight will-change-gpu text-balance"
-                style={{ textShadow: "0 20px 40px rgba(0,0,0,0.3)" }}
-              >
-                SonicWave Pro
-              </h2>
-              <p
-                ref={subtitleRef}
-                className="opacity-0 mt-4 text-white/60 max-w-2xl text-sm md:text-base will-change-gpu font-light leading-relaxed"
-              >
-                Watch how precision engineering unfolds frame by frame. Every component, perfectly orchestrated.
-              </p>
-            </div>
-          </div>
-
-          {/* Vignette effect */}
-          <div className="absolute inset-0 pointer-events-none" style={{
-            background: "radial-gradient(ellipse at center, transparent 30%, rgba(0,0,0,0.3) 100%)",
-          }} />
-
-          {/* Loading state */}
-          {loading ? (
-            <div className="absolute inset-0 flex items-center justify-center p-6 bg-black/20 backdrop-blur-sm">
-              <div className="rounded-2xl border border-white/10 bg-black/60 backdrop-blur-md px-6 py-4 text-white/70 text-sm md:text-base text-center">
-                <div className="mb-2">Preloading frames (1–150)…</div>
-                <div className="h-1 w-24 bg-white/10 rounded-full overflow-hidden mx-auto">
-                  <div className="h-full bg-gradient-to-r from-white/40 to-white/20 animate-pulse" />
-                </div>
-              </div>
-            </div>
-          ) : null}
+        {/* ── BACKGROUND SYSTEM ───────────────────── */}
+        <div className="absolute inset-0 z-0 pointer-events-none">
+          {/* base gradient */}
+          <div className="absolute inset-0 bg-[radial-gradient(ellipse_80%_70%_at_50%_60%,#0d0d0d_0%,#000_100%)]" />
+          {/* red cinematic light */}
+          <motion.div
+            animate={{ opacity: [0.5, 0.8, 0.5], scale: [1, 1.1, 1] }}
+            transition={{ duration: 8, repeat: Infinity, ease: "easeInOut" }}
+            className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[70vw] h-[70vw] rounded-full bg-[radial-gradient(circle,rgba(239,68,68,0.07)_0%,transparent_65%)]"
+          />
+          {/* upper atmospheric haze */}
+          <div className="absolute top-0 left-0 right-0 h-1/2 bg-gradient-to-b from-black/80 to-transparent" />
+          {/* lower atmospheric haze */}
+          <div className="absolute bottom-0 left-0 right-0 h-1/3 bg-gradient-to-t from-black to-transparent" />
+          {/* edge vignette */}
+          <div className="absolute inset-0 cinematic-vignette opacity-70" />
         </div>
-      </div>
 
-      {/* Content section after scroll animation */}
-      <div className="px-6 pb-20 pt-24 md:px-10 relative z-10 bg-gradient-to-b from-black via-[#050505] to-black">
-        <div className="mx-auto max-w-6xl">
-          <div className="flex flex-col md:flex-row md:items-end md:justify-between gap-12">
-            <div>
-              <h3 className="text-white/90 font-bold tracking-tight text-3xl md:text-4xl leading-tight">
-                Precision Revealed
-              </h3>
-              <p className="mt-4 text-white/60 text-sm md:text-base leading-relaxed max-w-2xl font-light">
-                Explore how the SonicWave Pro transforms from its sleek exterior to reveal the intricate engineering within. Every component is precisely positioned and optimized for the ultimate audio experience.
-              </p>
+        {/* ── CANVAS (centered product) ────────────── */}
+        <div className="absolute inset-0 z-10 will-change-transform">
+          <canvas ref={canvasRef} className="w-full h-full" />
+        </div>
+
+        {/* ── ALL UI (fades on scroll) ─────────────── */}
+        <div ref={uiRef} className="absolute inset-0 z-20 pointer-events-none select-none">
+
+          {/* TOP — massive background headline */}
+          <motion.div
+            initial={{ opacity: 0, y: -20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 2, ease: [0.16, 1, 0.3, 1] }}
+            className="absolute top-0 left-0 right-0 flex justify-center pt-[14vh]"
+          >
+            <h1
+              className="font-nature font-black text-center uppercase leading-none tracking-[-0.04em] text-[clamp(4rem,14vw,16rem)]"
+              style={{
+                background: "linear-gradient(180deg, rgba(255,255,255,0.07) 0%, transparent 100%)",
+                WebkitBackgroundClip: "text",
+                WebkitTextFillColor: "transparent",
+                backgroundClip: "text",
+              }}
+            >
+              Unheard
+            </h1>
+          </motion.div>
+
+          {/* BOTTOM — second word + info row */}
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 2, delay: 0.3, ease: [0.16, 1, 0.3, 1] }}
+            className="absolute bottom-0 left-0 right-0 pb-[8vh]"
+          >
+            {/* big bottom word */}
+            <div className="flex justify-center mb-8">
+              <span
+                className="font-nature font-black uppercase leading-none tracking-[-0.04em] text-[clamp(4rem,14vw,16rem)]"
+                style={{
+                  background: "linear-gradient(0deg, rgba(255,255,255,0.05) 0%, transparent 100%)",
+                  WebkitBackgroundClip: "text",
+                  WebkitTextFillColor: "transparent",
+                  backgroundClip: "text",
+                }}
+              >
+                Frequencies
+              </span>
             </div>
 
-            {/* Feature cards with hover effects */}
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 w-full md:max-w-2xl">
-              {[
-                {
-                  title: "Design Precision",
-                  description: "Each component rotates, separates, and expands in perfect synchronization.",
-                },
-                {
-                  title: "Performance",
-                  description: "Optimized rendering with RAF drawing for smooth 60fps animation.",
-                },
-                {
-                  title: "Premium Feel",
-                  description: "Subtle effects and parallax tied to scroll progress.",
-                },
-              ].map((feature, i) => (
-                <div
-                  key={i}
-                  className="group rounded-2xl border border-white/10 bg-white/5 backdrop-blur-sm p-5 hover:bg-white/8 hover:border-white/20 transition-smooth cursor-default"
-                >
-                  <div className="text-white/90 font-semibold tracking-tight group-hover:text-white transition-smooth">
-                    {feature.title}
+            {/* info strip */}
+            <div className="mx-auto max-w-5xl px-6 flex items-center justify-between border-t border-white/[0.06] pt-6">
+              {/* left — label */}
+              <div className="flex items-center gap-3">
+                <span className="w-4 h-px bg-red-highlight" />
+                <span className="font-mono text-red-highlight text-[9px] uppercase tracking-[0.35em]">
+                  Series One — MK II
+                </span>
+              </div>
+
+              {/* center — spec pills */}
+              <div className="hidden md:flex items-center gap-6">
+                {[
+                  { v: "80h", l: "Battery" },
+                  { v: "ANC", l: "Active Noise" },
+                  { v: "Hi-Res", l: "Audio" },
+                ].map(({ v, l }) => (
+                  <div key={v} className="flex flex-col items-center gap-0.5">
+                    <span className="font-mono text-white/60 text-[11px] font-medium tracking-wide">{v}</span>
+                    <span className="font-mono text-white/20 text-[9px] uppercase tracking-widest">{l}</span>
                   </div>
-                  <div className="mt-2 text-white/60 text-sm group-hover:text-white/70 transition-smooth">
-                    {feature.description}
-                  </div>
+                ))}
+              </div>
+
+              {/* right — CTAs */}
+              <div className="flex items-center gap-4 pointer-events-auto">
+                <button className="group relative px-6 py-2.5 overflow-hidden border border-white/10 hover:border-red-highlight/40 text-white/50 hover:text-white font-mono text-[9px] uppercase tracking-[0.2em] transition-all duration-500">
+                  <span className="relative z-10">Explore</span>
+                  <div className="absolute inset-0 bg-red-highlight/5 opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
+                </button>
+                <button className="group px-6 py-2.5 bg-red-highlight text-white font-mono text-[9px] uppercase tracking-[0.2em] hover:bg-red-highlight/90 transition-colors duration-300 shadow-[0_0_20px_rgba(239,68,68,0.25)] hover:shadow-[0_0_35px_rgba(239,68,68,0.4)]">
+                  Pre-order
+                </button>
+              </div>
+            </div>
+          </motion.div>
+
+          {/* LEFT — floating spec indicator */}
+          <motion.div
+            initial={{ opacity: 0, x: -16 }}
+            animate={{ opacity: 1, x: 0 }}
+            transition={{ duration: 2, delay: 0.8, ease: [0.16, 1, 0.3, 1] }}
+            className="absolute left-6 md:left-10 top-1/2 -translate-y-1/2 flex flex-col items-center gap-3 hidden lg:flex"
+          >
+            <div className="w-px h-16 bg-gradient-to-b from-transparent via-white/10 to-transparent" />
+            <div className="flex flex-col gap-4">
+              {["40mm", "24-bit", "BT 5.3"].map((spec) => (
+                <div key={spec} className="flex flex-col items-center gap-1">
+                  <span className="font-mono text-white/40 text-[10px] tracking-wider [writing-mode:vertical-rl]">{spec}</span>
                 </div>
               ))}
             </div>
-          </div>
+            <div className="w-px h-16 bg-gradient-to-b from-transparent via-white/10 to-transparent" />
+          </motion.div>
+
+          {/* RIGHT — audio frequency bars (decorative) */}
+          <motion.div
+            initial={{ opacity: 0, x: 16 }}
+            animate={{ opacity: 1, x: 0 }}
+            transition={{ duration: 2, delay: 0.8, ease: [0.16, 1, 0.3, 1] }}
+            className="absolute right-6 md:right-10 top-1/2 -translate-y-1/2 hidden lg:flex flex-col items-center gap-2"
+          >
+            {[14, 22, 10, 28, 18, 8, 24, 16].map((h, i) => (
+              <motion.div
+                key={i}
+                animate={{ scaleY: [1, 0.4, 1], opacity: [0.3, 0.15, 0.3] }}
+                transition={{ duration: 1.5 + i * 0.15, repeat: Infinity, ease: "easeInOut", delay: i * 0.1 }}
+                style={{ height: h }}
+                className="w-[1px] bg-red-highlight origin-bottom"
+              />
+            ))}
+            <span className="font-mono text-white/15 text-[8px] uppercase tracking-widest mt-2 [writing-mode:vertical-rl]">Frequency</span>
+          </motion.div>
+
+          {/* SCROLL indicator — center bottom */}
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ delay: 3, duration: 2 }}
+            className="absolute bottom-[13vh] left-1/2 -translate-x-1/2"
+          >
+            <motion.div
+              animate={{ y: [0, 8, 0] }}
+              transition={{ duration: 2, repeat: Infinity, ease: "easeInOut" }}
+              className="flex flex-col items-center gap-1.5"
+            >
+              <div className="w-px h-6 bg-gradient-to-b from-white/20 to-transparent" />
+              <svg width="10" height="6" viewBox="0 0 10 6" fill="none">
+                <path d="M1 1l4 4 4-4" stroke="rgba(255,255,255,0.2)" strokeWidth="1" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+            </motion.div>
+          </motion.div>
         </div>
+
+        {/* ── LOADING ──────────────────────────────── */}
+        {loading && (
+          <div className="absolute inset-0 bg-black z-[100] flex flex-col items-center justify-center gap-8">
+            <div className="w-20 h-px bg-white/5 overflow-hidden">
+              <motion.div
+                animate={{ x: [-80, 80] }}
+                transition={{ duration: 1.2, repeat: Infinity, ease: "easeInOut" }}
+                className="w-full h-full bg-red-highlight"
+              />
+            </div>
+            <span className="font-mono text-white/15 text-[8px] uppercase tracking-[0.6em]">
+              Initializing
+            </span>
+          </div>
+        )}
+
       </div>
     </section>
   );
 }
-
