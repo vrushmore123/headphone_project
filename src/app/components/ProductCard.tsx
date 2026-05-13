@@ -20,7 +20,7 @@ const itemVariants = {
     y: 0,
     transition: {
       duration: 1.2,
-      ease: [0.16, 1, 0.3, 1],
+      ease: [0.16, 1, 0.3, 1] as [number, number, number, number],
     },
   },
 };
@@ -55,7 +55,7 @@ export default function ProductCard({
           alt={name}
           className="w-full h-full object-contain p-12 transition-all duration-1000 group-hover:scale-110 group-hover:rotate-2"
         />
-        
+
         {/* Hover Overlay */}
         <div className="absolute inset-0 bg-deep-black/40 opacity-0 group-hover:opacity-100 transition-opacity duration-500 flex items-center justify-center">
           <button className="btn-premium opacity-0 group-hover:opacity-100 translate-y-4 group-hover:translate-y-0 transition-all duration-500 delay-100">
@@ -74,7 +74,7 @@ export default function ProductCard({
             {price}
           </span>
         </div>
-        
+
         <p className="text-ghost-white/40 text-sm font-light leading-relaxed mb-8 flex-1">
           {description}
         </p>
